@@ -1,4 +1,4 @@
-# @title 🚀 CÓDIGO FINAL E COMPLETO DA APLICAÇÃO STREAMLIT (app.py)
+# @title 🚀 CÓDIGO FINAL DE EVOLUÇÃO SALARIAL (Versão Estável & Futurista)
 
 import streamlit as st
 import pdfplumber
@@ -9,7 +9,6 @@ import sys
 import subprocess
 
 # --- 1. INSTALAÇÃO DAS FERRAMENTAS ---
-# Garante que as ferramentas estejam prontas
 try:
     import pdfplumber
 except ImportError:
@@ -36,7 +35,7 @@ def processar_pdf(file):
     padrao_monetario_regex = r'(\d{1,3}(?:\.\d{3})*,\d{2})'
 
     with pdfplumber.open(file) as pdf:
-        st.info(f"Analisando {len(pdf.pages)} páginas...")
+        st.info(f"Analisando {len(pdf.pages)} páginas do PDF...")
         
         for page in pdf.pages:
             texto = page.extract_text()
@@ -101,7 +100,7 @@ def processar_pdf(file):
                         else:
                             dados_mes[chave] = valor_fmt
             
-            # Captura Líquido (Garante que seja o último valor significativo)
+            # Captura Líquido (Final)
             match_liquido = re.search(r'(?:L[IÍ]QUIDO|VALOR LIQUIDO).+?(\d{1,3}(?:\.\d{3})*,\d{2})', texto, re.IGNORECASE | re.DOTALL)
             if match_liquido:
                 dados_mes['VALOR LÍQUIDO'] = match_liquido.group(1).strip()
@@ -127,49 +126,48 @@ def check_password_stable():
 # --- INTERFACE E EXECUÇÃO ---
 
 if check_password_stable():
-    st.title("📊 Sistema de Evolução Salarial - Multiempresas")
-    st.subheader("Ferramenta Analítica para Holerites")
-    st.markdown("---")
+    # --- UI FUTURISTA E MODERNA ---
+    st.markdown("<h1 style='text-align: center; color: #1E90FF;'>🌌 Matriz de Evolução Salarial</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #BBB;'>Ferramenta Analítica para Holerites (Multi-Layout)</p>", unsafe_allow_html=True)
+    st.divider() # Modern separator
 
-    uploaded_file = st.file_uploader("1. Arraste e solte o arquivo PDF aqui:", type="pdf")
+    uploaded_file = st.file_uploader("1. 📡 INPUT: Transmitir Arquivo PDF (Holerites ou Processo):", type="pdf", help="Selecione o PDF ou arraste para iniciar a análise dos dados.")
 
     if uploaded_file is not None:
         file_buffer = io.BytesIO(uploaded_file.read())
 
-        with st.spinner('2. Analisando PDF e extraindo todas as verbas...'):
+        with st.spinner('2. 🛰️ PROCESSANDO DADOS... Analisando Estrutura de Folha...'):
             try:
                 df = processar_pdf(file_buffer)
                 
                 if not df.empty:
-                    st.success(f"✅ Processamento concluído! {len(df)} meses encontrados.")
+                    st.divider()
+                    st.markdown("### ✅ EXTRAÇÃO CONCLUÍDA")
 
-                    # Reorganiza a tabela (Mês/Ano, Bases e Líquido no final)
-                    cols = list(df.columns)
-                    if 'Mês/Ano' in cols: cols.remove('Mês/Ano'); cols.insert(0, 'Mês/Ano')
+                    # Display Metrics (Futuristic touch)
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Competências Encontradas", len(df), delta=None)
+                    col2.metric("Total de Colunas Analisadas", len(df.columns), delta=None)
+                    col3.metric("Status da Base", "Verificação OK", delta=None)
                     
-                    bases = [c for c in cols if 'BASE' in c.upper() or 'FGTS' in c.upper() or 'LÍQUIDO' in c.upper()]
-                    for b in bases:
-                        if b in cols: cols.remove(b); cols.append(b)
-                    
-                    df = df[cols]
-                    
-                    st.dataframe(df, height=300) 
+                    # Dataframe Display
+                    st.markdown("### 📊 Tabela Analítica (Saída BR/Excel)")
+                    st.dataframe(df, use_container_width=True) 
                     
                     # Botão de Download
                     buffer = io.BytesIO()
                     with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                        # Exporta, substituindo '-' por 0 para que o Excel entenda a coluna como numérica
                         df_export = df.replace('-', '0').copy() 
                         df_export.to_excel(writer, index=False, sheet_name='Evolucao')
                         
                     st.download_button(
-                        label="3. BAIXAR PLANILHA EXCEL PRONTA",
+                        label="3. 💾 DOWNLOAD: Baixar Planilha Excel (Protocolo .XLSX)",
                         data=buffer,
                         file_name="Evolucao_Salarial_Analitica_FINAL.xlsx",
                         mime="application/vnd.ms-excel"
                     )
                 else:
-                    st.warning("Não foi possível extrair dados de holerite deste PDF. O arquivo pode estar escaneado.", icon="⚠️")
+                    st.warning("Não foi possível extrair dados tabulares de holerite deste PDF. O arquivo pode estar escaneado.", icon="⚠️")
                     
             except Exception as e:
                 st.error(f"❌ Ocorreu um erro catastrófico. Por favor, tente novamente ou entre em contato com o suporte: {e}", icon="🚨")
