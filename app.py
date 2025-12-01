@@ -1,3 +1,5 @@
+# @title 🚀 CÓDIGO FINAL DE EVOLUÇÃO SALARIAL + CORTADOR PRO
+
 import streamlit as st
 import pdfplumber
 import pandas as pd
@@ -5,66 +7,53 @@ import re
 import io
 import sys
 import subprocess
-from PyPDF2 import PdfReader, PdfWriter
 
-# --- 1. AUTO-INSTALAÇÃO (PREVENÇÃO DE ERROS) ---
+# --- 1. INSTALAÇÃO DAS FERRAMENTAS ---
 try:
     import pdfplumber
-    import xlsxwriter
     import PyPDF2
 except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pdfplumber", "pandas", "openpyxl", "xlsxwriter", "PyPDF2"])
+    st.info("Instalando ferramentas... Aguarde um momento.")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pdfplumber", "pandas", "openpyxl", "PyPDF2", "xlsxwriter"])
     import pdfplumber
     import PyPDF2
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Ferramentas Jurídicas", layout="wide")
+from PyPDF2 import PdfReader, PdfWriter
 
-# --- FUNÇÕES DE EXTRAÇÃO (CALCULADORA) ---
+# --- FUNÇÕES DE EXTRAÇÃO ---
 def extrair_valor_monetario(texto):
     padrao = r'(\d{1,3}(?:\.\d{3})*,\d{2})'
     encontrados = re.findall(padrao, texto)
     return encontrados[-1] if encontrados else None
 
-def encontrar_data_competencia(texto):
-    linhas_iniciais = texto.split('\n')[:15]
-    texto_cabecalho = "\n".join(linhas_iniciais).upper()
-    
-    match_rotulo = re.search(r'(?:PER[ÍI]ODO|REF|M[ÊE]S/ANO|COMPET[ÊE]NCIA|DATA)[:\.\s-]*(\d{2}/\d{4}|[A-ZÇÃÕ]{3,9}[/\s-]+\d{4})', texto_cabecalho)
-    if match_rotulo: return match_rotulo.group(1).strip()
-    
-    match_solto = re.search(r'\b(\d{2}/\d{4}|[A-ZÇÃÕ]{3,9}/\d{4})\b', texto_cabecalho)
-    if match_solto: return match_solto.group(1).strip()
-    
-    match_titulo = re.search(r'\b(JANEIRO|FEVEREIRO|MAR[ÇC]O|ABRIL|MAIO|JUNHO|JULHO|AGOSTO|SETEMBRO|OUTUBRO|NOVEMBRO|DEZEMBRO)\s+(\d{4})\b', texto_cabecalho)
-    if match_titulo: return f"{match_titulo.group(1)}/{match_titulo.group(2)}"
-    
-    return "Não Identificado"
-
-def processar_pdf_extracao(file):
+def processar_pdf_holerite(file):
     dados_gerais = []
     padrao_monetario_regex = r'(\d{1,3}(?:\.\d{3})*,\d{2})'
 
     with pdfplumber.open(file) as pdf:
-        # Barra de progresso apenas na aba de extração
-        my_bar = st.progress(0, text="Lendo PDF...")
-        total_pages = len(pdf.pages)
+        # Barra de progresso
+        prog_bar = st.progress(0, text="Analisando Holerites...")
+        total_p = len(pdf.pages)
         
         for i, page in enumerate(pdf.pages):
-            my_bar.progress(int((i / total_pages) * 100), text=f"Lendo página {i+1}")
+            prog_bar.progress(int((i / total_p) * 100))
             texto = page.extract_text()
             if not texto: continue
+            
             lines = texto.split('\n')
             
-            mes_ano = encontrar_data_competencia(texto)
-            if mes_ano == "Não Identificado" and len(dados_gerais) > 0:
-                mes_ano = dados_gerais[-1]['Mês/Ano'] + " (Cont.)"
+            # Data
+            mes_ano = "Não Identificado"
+            match_data = re.search(r'(?:Período|Periodo|Mês/Ano|Data)[:\.\s-]*(\d{2}/\d{4}|[A-ZÀ-ZÇÃÕ]{3,9}[/\s]+\d{4})', texto, re.IGNORECASE)
+            if match_data: mes_ano = match_data.group(1).strip()
+            else:
+                match_gen = re.search(r'\b(\d{2}/\d{4})\b', texto)
+                if match_gen: mes_ano = match_gen.group(1)
             
             dados_mes = {'Mês/Ano': mes_ano}
             
             for line in lines:
                 line = line.strip()
-                if not line: continue
                 verbas_encontradas = []
 
                 match_coluna_dupla = re.search(r'(.+?)\s+' + padrao_monetario_regex + r'\s+(.+?)\s+' + padrao_monetario_regex, line)
@@ -78,16 +67,17 @@ def processar_pdf_extracao(file):
 
                 for descricao_raw, valor_fmt in verbas_encontradas:
                     if not valor_fmt: continue
+                    
                     descricao_limpa = re.sub(r'^[0-9./-]+\s*[-]?\s*', '', descricao_raw).strip()
                     descricao_limpa = re.sub(r'[^\w\s/.-]', '', descricao_limpa).strip()
+                    
                     if len(descricao_limpa) < 2: continue
-                    if "201" in valor_fmt and "," not in valor_fmt: continue 
 
                     if any(x in descricao_limpa.upper() for x in ['BASE', 'FGTS', 'TRIBUTÁVEL', 'LÍQUIDO', 'LIQUIDO', 'TOTAL']):
                         if 'BASE INSS' in descricao_limpa.upper(): dados_mes['BASE INSS (Rodapé)'] = valor_fmt
-                        elif 'FGTS' in descricao_limpa.upper() and 'VALOR' not in descricao_limpa.upper() and 'BASE' in descricao_limpa.upper(): dados_mes['BASE FGTS'] = valor_fmt
-                        elif 'VALOR FGTS' in descricao_limpa.upper() or 'DEPÓSITO FGTS' in descricao_limpa.upper(): dados_mes['Valor FGTS'] = valor_fmt
-                        elif 'LÍQUIDO' in descricao_limpa.upper() or 'LIQUIDO' in descricao_limpa.upper(): dados_mes['LÍQUIDO (Recibo)'] = valor_fmt
+                        elif 'FGTS' in descricao_limpa.upper() and 'VALOR' not in descricao_limpa.upper(): dados_mes['BASE FGTS'] = valor_fmt
+                        elif 'VALOR FGTS' in descricao_limpa.upper(): dados_mes['Valor FGTS'] = valor_fmt
+                        elif 'LÍQUIDO' in descricao_limpa.upper(): dados_mes['LÍQUIDO (Recibo)'] = valor_fmt
                         continue
                         
                     if len(descricao_limpa) > 2 and 'TOTAL' not in descricao_limpa.upper():
@@ -100,7 +90,9 @@ def processar_pdf_extracao(file):
                  if match_liq: dados_mes['LÍQUIDO (Recibo)'] = match_liq.group(1)
 
             if len(dados_mes) > 1: dados_gerais.append(dados_mes)
-        my_bar.empty()
+        
+        prog_bar.empty()
+
     return pd.DataFrame(dados_gerais)
 
 # --- LOGIN ---
@@ -112,27 +104,22 @@ def check_password():
 
 # --- INTERFACE PRINCIPAL ---
 if check_password():
-    
-    # Menu lateral para trocar de ferramenta
-    st.sidebar.title("🧰 Menu de Ferramentas")
-    escolha = st.sidebar.radio("Escolha o que fazer:", ["📊 Extrator de Holerites", "✂️ Cortar/Dividir PDF"])
+    st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2666/2666505.png", width=50)
+    st.sidebar.title("Menu Jurídico")
+    escolha = st.sidebar.radio("Selecione a Ferramenta:", ["📊 Extrator de Holerites", "✂️ Cortar PDF (Multiseleção)"])
 
-    # --- ABA 1: EXTRATOR (Seu código original melhorado) ---
+    # --- ABA 1: EXTRATOR ---
     if escolha == "📊 Extrator de Holerites":
-        st.markdown("<h1 style='color: #1E90FF;'>📊 Extrator de Evolução Salarial</h1>", unsafe_allow_html=True)
-        st.info("Use esta aba para gerar o Excel dos holerites.")
-        
-        uploaded_file = st.file_uploader("Solte o PDF dos Holerites aqui", type="pdf", key="upload_extrator")
+        st.markdown("## 📊 Extrator de Evolução Salarial")
+        uploaded_file = st.file_uploader("Solte o PDF dos Holerites aqui", type="pdf")
 
         if uploaded_file:
             try:
-                bytes_data = uploaded_file.getvalue()
-                file_buffer = io.BytesIO(bytes_data)
-                df = processar_pdf_extracao(file_buffer)
+                file_buffer = io.BytesIO(uploaded_file.read())
+                df = processar_pdf_holerite(file_buffer)
                 
                 if not df.empty:
-                    st.success(f"✅ Sucesso! {len(df)} competências extraídas.")
-                    
+                    st.success(f"Sucesso! {len(df)} competências extraídas.")
                     cols = list(df.columns)
                     if 'Mês/Ano' in cols: cols.remove('Mês/Ano'); cols.insert(0, 'Mês/Ano')
                     bases = [c for c in cols if any(x in c.upper() for x in ['BASE', 'FGTS', 'LÍQUIDO', 'TOTAL'])]
@@ -146,64 +133,81 @@ if check_password():
                         df.to_excel(writer, index=False)
                     
                     st.download_button("⬇️ Baixar Excel", data=buffer, file_name="Evolucao.xlsx", mime="application/vnd.ms-excel", type="primary")
-                    
-                    with st.expander("🕵️‍♂️ Ver Texto Bruto (Para Debug)"):
-                        pdf = pdfplumber.open(io.BytesIO(bytes_data))
-                        st.text(pdf.pages[0].extract_text())
                 else:
-                    st.error("Nenhum dado encontrado.")
+                    st.error("Nenhum dado tabular encontrado.")
             except Exception as e:
-                st.error(f"Erro técnico: {e}")
+                st.error(f"Erro: {e}")
 
-    # --- ABA 2: CORTAR PDF (Nova Funcionalidade) ---
-    elif escolha == "✂️ Cortar/Dividir PDF":
-        st.markdown("<h1 style='color: #FF4B4B;'>✂️ Cortador de PDF</h1>", unsafe_allow_html=True)
-        st.info("Use esta aba para separar páginas ou dividir um PDF grande.")
+    # --- ABA 2: CORTAR PDF (NOVA LÓGICA) ---
+    elif escolha == "✂️ Cortar PDF (Multiseleção)":
+        st.markdown("## ✂️ Cortador de PDF Personalizado")
+        st.info("Adicione quantos intervalos quiser. O sistema vai juntar tudo num arquivo só no final.")
 
-        pdf_corte = st.file_uploader("Solte o PDF que deseja cortar", type="pdf", key="upload_corte")
+        pdf_corte = st.file_uploader("Solte o PDF que deseja cortar", type="pdf")
 
         if pdf_corte:
+            # Inicializa lista de cortes na memória da sessão
+            if 'lista_cortes' not in st.session_state:
+                st.session_state.lista_cortes = []
+
             reader = PdfReader(pdf_corte)
             total_paginas = len(reader.pages)
-            st.write(f"📄 O arquivo possui **{total_paginas} páginas**.")
+            st.write(f"📄 Este documento tem **{total_paginas} páginas**.")
+            st.markdown("---")
 
-            modo_corte = st.radio("Como deseja cortar?", ["Selecionar Intervalo (ex: pág 1 a 5)", "Selecionar Páginas Específicas (ex: 1, 3, 5)"])
+            # Área de Input
+            c1, c2, c3 = st.columns([2, 2, 2])
+            with c1:
+                inicio = st.number_input("Da Página:", min_value=1, max_value=total_paginas, value=1, key="inicio")
+            with c2:
+                fim = st.number_input("Até a Página:", min_value=1, max_value=total_paginas, value=1, key="fim")
+            with c3:
+                st.write("") # Espaço para alinhar
+                st.write("")
+                if st.button("➕ Adicionar Intervalo"):
+                    if fim >= inicio:
+                        st.session_state.lista_cortes.append({'De': inicio, 'Até': fim})
+                        st.success(f"Páginas {inicio} a {fim} adicionadas à lista!")
+                    else:
+                        st.error("A página final deve ser maior que a inicial.")
 
-            if modo_corte == "Selecionar Intervalo (ex: pág 1 a 5)":
-                col1, col2 = st.columns(2)
-                inicio = col1.number_input("Página Inicial", min_value=1, max_value=total_pages, value=1)
-                fim = col2.number_input("Página Final", min_value=inicio, max_value=total_pages, value=min(5, total_pages))
+            # Mostra a lista do que vai ser cortado
+            if st.session_state.lista_cortes:
+                st.markdown("### 📋 Lista de Cortes a processar:")
+                df_cortes = pd.DataFrame(st.session_state.lista_cortes)
+                st.table(df_cortes)
+
+                col_limpar, col_processar = st.columns([1, 3])
                 
-                paginas_selecionadas = list(range(inicio-1, fim)) # Python começa em 0
-            
-            else:
-                paginas_input = st.text_input("Digite os números das páginas separados por vírgula (ex: 1, 5, 10)")
-                paginas_selecionadas = []
-                if paginas_input:
-                    try:
-                        paginas_selecionadas = [int(p.strip())-1 for p in paginas_input.split(",") if p.strip().isdigit()]
-                        paginas_selecionadas = [p for p in paginas_selecionadas if 0 <= p < total_paginas]
-                    except:
-                        st.error("Formato inválido. Use números e vírgulas.")
+                with col_limpar:
+                    if st.button("🗑️ Limpar Lista"):
+                        st.session_state.lista_cortes = []
+                        st.rerun()
 
-            if st.button("✂️ Cortar e Baixar PDF"):
-                if not paginas_selecionadas:
-                    st.warning("Nenhuma página selecionada.")
-                else:
-                    writer = PdfWriter()
-                    for p in paginas_selecionadas:
-                        writer.add_page(reader.pages[p])
-                    
-                    # Salvar em memória
-                    output_buffer = io.BytesIO()
-                    writer.write(output_buffer)
-                    pdf_bytes = output_buffer.getvalue()
-                    
-                    st.success("PDF Cortado com sucesso!")
-                    st.download_button(
-                        label="⬇️ Baixar PDF Cortado",
-                        data=pdf_bytes,
-                        file_name="documento_cortado.pdf",
-                        mime="application/pdf",
-                        type="primary"
-                    )
+                with col_processar:
+                    if st.button("✂️ GERAR PDF FINAL (JUNTAR TUDO)", type="primary"):
+                        writer = PdfWriter()
+                        
+                        # Processa a lista
+                        for corte in st.session_state.lista_cortes:
+                            # O usuário vê pagina 1, mas pro python é 0. Ajustamos aqui.
+                            start_idx = corte['De'] - 1
+                            end_idx = corte['Até'] # Range do python exclui o ultimo, então não subtraímos 1 aqui
+                            
+                            for i in range(start_idx, end_idx):
+                                if i < total_paginas:
+                                    writer.add_page(reader.pages[i])
+                        
+                        output_buffer = io.BytesIO()
+                        writer.write(output_buffer)
+                        pdf_bytes = output_buffer.getvalue()
+                        
+                        st.balloons()
+                        st.download_button(
+                            label="⬇️ Baixar PDF Cortado e Unificado",
+                            data=pdf_bytes,
+                            file_name="documento_personalizado.pdf",
+                            mime="application/pdf"
+                        )
+            else:
+                st.warning("Adicione pelo menos um intervalo acima para começar.")
