@@ -198,3 +198,27 @@ if check_password():
     # --- ABA 3: JOGO DE MOEDA (NOVIDADE) ---
     with tab3:
         game_aba()
+
+st.markdown("""
+<style>
+/* 1. MUDANÇA DE COR DOS INPUTS E WIDGETS */
+/* Garante que os campos de texto e upload fiquem mais claros no modo escuro */
+section.st-emotion-cache-1c9vyrb {
+    border: 1px solid #007ACC;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+/* 2. CENTRALIZAÇÃO E ESTILO DO BOTÃO DE DOWNLOAD */
+div.stDownloadButton > button {
+    background-color: #007ACC;
+    color: white;
+    border-radius: 8px;
+    padding: 10px 20px;
+    border: none;
+    transition: background-color 0.3s;
+    display: block;
+    margin: 0 auto;
+}
+</style>
+""", unsafe_allow_html=True)
