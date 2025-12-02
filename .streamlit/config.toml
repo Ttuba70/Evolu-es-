@@ -1,0 +1,6 @@
+[theme]
+primaryColor="#007ACC"          # Azul/Ciano forte para botões e links
+backgroundColor="#0D1117"       # Fundo escuro total (Dark Mode)
+secondaryBackgroundColor="#1A202C" # Fundo secundário para containers
+textColor="#FFFFFF"             # Cor do texto (Branco)
+font="sans serif"
